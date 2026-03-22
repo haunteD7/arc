@@ -4,7 +4,10 @@
 #include "huffman.h"
 
 #include <memory>
+#include <bitset>
 #include <iostream>
+#include <ranges>
+#include <algorithm>
 #include <cmath>
 #include <queue>
 #include <unordered_map>
@@ -107,16 +110,40 @@ private:
 
     return std::unique_ptr<HNode>(nodes.top());
   }
-  void build_dictionary(HNode* node, uint8_t depth = 0, EcSymbol symbol = 0)
+  void build_dictionary(HNode* node)
+  {
+    std::vector<OgSymbolInfo> symbols;
+
+    build_lengths(node, symbols);
+    std::ranges::sort(symbols, [](const OgSymbolInfo& l, const OgSymbolInfo& r) {
+      if(l.ec_len == r.ec_len)
+        return l.code < r.code;
+        
+      return l.ec_len < r.ec_len;
+    });
+
+    EcSymbol code = 0;
+    uint8_t prev_len = 0;
+    for(auto sym : symbols)
+    {
+      code <<= (sym.ec_len - prev_len);
+
+      _dict[sym.code] = { code, sym.ec_len };
+      
+      code++;
+      prev_len = sym.ec_len;
+    }
+  }
+  void build_lengths(HNode* node, std::vector<OgSymbolInfo>& symbols, uint8_t depth = 0)
   {
     if(!node->left && !node->right) /* If it's last child */
     {
-      _dict[node->symbol] = { symbol, depth == (uint8_t)0 ? (uint8_t)1 : depth };
+      symbols.push_back({ node->symbol, depth == (uint8_t)0 ? (uint8_t)1 : depth });
       return;
     }
-  
-    build_dictionary(node->left, depth + 1, symbol << 1); /* Left child (add 0) */
-    build_dictionary(node->right, depth + 1, (symbol << 1) | 1); /* Right child (add 1) */
+
+    build_lengths(node->left, symbols, depth + 1);
+    build_lengths(node->right, symbols, depth + 1);
   }
   BitReader _br;
   BitWriter _bw;

@@ -7,9 +7,11 @@
 #include <ranges>
 #include <algorithm>
 #include <iostream>
+#include <set>
+#include <bitset>
 #include <cmath>
 #include <queue>
-#include <map>
+#include <unordered_map>
 
 class HuffmanUnpack
 {
@@ -31,14 +33,12 @@ public:
     std::vector<OgSymbolInfo> symbols;
     symbols.reserve(header_len / (symbol_len + encoded_symbol_len_len));
 
-    OgSymbol sym = 0;
-    uint8_t prev_len = 0;
-
     /* Build array of symbols and it's encoded length */
     while(header_br.get_pos() < header_len)
     {
-      sym = header_br.get_bits<OgSymbol>(symbol_len);
+      OgSymbol sym = header_br.get_bits<OgSymbol>(symbol_len);
       uint8_t len = header_br.get_bits<uint8_t>(encoded_symbol_len_len) + 1;
+      symbols.push_back({ sym, len });
     }
     std::ranges::sort(symbols, [](const OgSymbolInfo& l, const OgSymbolInfo& r) {
       if(l.ec_len == r.ec_len)
@@ -46,8 +46,9 @@ public:
         
       return l.ec_len < r.ec_len;
     });
-
-    std::map<EcSymbol, OgSymbolInfo> dict;
+    
+    std::unordered_map<EcSymbol, OgSymbolInfo> dict;
+    std::vector<uint8_t> lengths_available;
     EcSymbol code = 0;
     uint8_t prev_len = 0;
     for(auto sym : symbols)
@@ -55,8 +56,9 @@ public:
       code <<= (sym.ec_len - prev_len);
 
       dict[code] = sym;
-      
       code++;
+      
+      lengths_available.push_back(sym.ec_len);
       prev_len = sym.ec_len;
     }
       
@@ -65,7 +67,16 @@ public:
 
     while(!_br.eof())
     {
-      
+      for(auto i : lengths_available)
+      {
+        EcSymbol sym = _br.peek_bits<EcSymbol>(i);
+        if(dict.contains(sym))
+        {
+          _br.move_forward(i);
+          _bw.put_bits(symbol_len, dict[sym].code);
+          break;
+        }
+      }
     }
   }
   const std::vector<uint8_t>& get_result() { return _bw.get_data(); }
