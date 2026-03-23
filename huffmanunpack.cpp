@@ -47,18 +47,33 @@ public:
       return l.ec_len < r.ec_len;
     });
     
-    std::unordered_map<EcSymbol, OgSymbolInfo> dict;
-    std::vector<uint8_t> lengths_available;
-    EcSymbol code = 0;
+    auto root = std::make_unique<HNode>();
     uint8_t prev_len = 0;
+    uint64_t code = 0;
     for(auto sym : symbols)
     {
       code <<= (sym.ec_len - prev_len);
 
-      dict[code] = sym;
+      HNode* current = root.get();
+      for(int i = sym.ec_len - 1; i >= 0; i--)
+      {
+        bool bit = (code >> i) & 1ULL;
+        if(bit)
+        {
+          if(current->right == nullptr)
+            current->right = new HNode;
+          current = current->right;
+        }
+        else
+        {
+          if(current->left == nullptr)
+            current->left = new HNode;
+          current = current->left;
+        }
+      }
+      current->symbol = sym.code;
+
       code++;
-      
-      lengths_available.push_back(sym.ec_len);
       prev_len = sym.ec_len;
     }
       
@@ -67,16 +82,17 @@ public:
 
     while(!_br.eof())
     {
-      for(auto i : lengths_available)
+      HNode* current = root.get();
+      while(!(current->left == nullptr && current->right == nullptr))
       {
-        EcSymbol sym = _br.peek_bits<EcSymbol>(i);
-        if(dict.contains(sym))
-        {
-          _br.move_forward(i);
-          _bw.put_bits(symbol_len, dict[sym].code);
-          break;
-        }
+        bool bit = _br.get();
+        if(bit)
+          current = current->right;
+        else
+          current = current->left;
       }
+      _bw.put_bits(symbol_len, current->symbol);
+      current = root.get();
     }
   }
   const std::vector<uint8_t>& get_result() { return _bw.get_data(); }
