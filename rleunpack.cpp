@@ -1,69 +1,87 @@
 #include "utils.h"
-#include "bitreader.h"
-#include "bitwriter.h"
+
+#include <vector>
+#include <cstdint>
+#include <iterator>
+#include <stdexcept>
 
 class RLEUnpack
 {
 public:
-  void unpack(const std::vector<uint8_t>& data)
+  template <std::random_access_iterator Iterator>
+  void unpack(Iterator begin, Iterator end, size_t repeats_len_bytes, size_t symbol_len_bytes)
   {
-    if(data.empty())
-      return;
-      
-    uint8_t repeats_len;
-    uint8_t symbol_len;
-    uint8_t padding;
+    _result.clear();
+
+    Iterator current = begin;
+
+    while (current < end)
     {
-      BitReader header_br;
-      header_br.set_data(data);
+      size_t remaining = std::distance(current, end);
 
-      repeats_len = _br.get_bits<uint8_t>(5) + 1;
-      symbol_len = _br.get_bits<uint8_t>(5) + 1;
-      padding = _br.get_bits<size_t>(3);
+      if (remaining < repeats_len_bytes)
+        throw std::out_of_range("Not enough data for repeat count");
 
-      _br.set_data(data, padding);
-      _br.move_forward(header_br.get_len());
-    }
+      // читаем повторения или литерал-маркер
+      size_t repeats_num = read_integer(current, repeats_len_bytes);
 
-    while(!_br.eof())
-    {
-      size_t repeats = _br.get_bits<size_t>(repeats_len);
-      if(repeats == 0)
+      if (repeats_num == 0) // литерал
       {
-        size_t literal_len = _br.get_bits<size_t>(repeats_len);
-        for(size_t i = 0; i < literal_len; i++)
-        {
-          uint64_t sym = _br.get_bits<uint64_t>(symbol_len);
-          _bw.put_bits(symbol_len, sym);
-        }
+        if (std::distance(current, end) < repeats_len_bytes)
+          throw std::out_of_range("Not enough data for literal length");
+
+        size_t literal_len = read_integer(current, repeats_len_bytes);
+        size_t literal_bytes = literal_len * symbol_len_bytes;
+
+        if (std::distance(current, end) < literal_bytes)
+          throw std::out_of_range("Not enough data for literal symbols");
+
+        _result.insert(_result.end(), current, current + literal_bytes);
+        current += literal_bytes;
       }
-      else
+      else // повторяющийся символ
       {
-        uint64_t sym = _br.get_bits<uint64_t>(symbol_len);
-        for(size_t i = 0; i < repeats; i++)
-        {
-          _bw.put_bits(symbol_len, sym);
-        }
+        if (std::distance(current, end) < symbol_len_bytes)
+          throw std::out_of_range("Not enough data for repeated symbol");
+
+        std::vector<uint8_t> sym(current, current + symbol_len_bytes);
+        current += symbol_len_bytes;
+
+        for (size_t i = 0; i < repeats_num; i++)
+          _result.insert(_result.end(), sym.begin(), sym.end());
       }
     }
   }
-  const std::vector<uint8_t>& get_result() { return _bw.get_data(); }
+
+  const std::vector<uint8_t> &get_result() const { return _result; }
+
 private:
-  BitReader _br;
-  BitWriter _bw;
+  // читаем little-endian integer из current и сдвигаем итератор
+  template <std::random_access_iterator Iterator>
+  size_t read_integer(Iterator &it, size_t bytes)
+  {
+    size_t value = 0;
+    for (size_t i = 0; i < bytes; i++)
+    {
+      value |= static_cast<size_t>(*it) << (8 * i);
+      ++it;
+    }
+    return value;
+  }
+
+  std::vector<uint8_t> _result;
 };
 
 int main(int argc, char const *argv[])
 {
   auto data = read_file_by_args(argc, argv, "a.bin");
-  if(!data.has_value())
+  if (!data.has_value())
     return -1;
 
   RLEUnpack unpacker;
-  unpacker.unpack(data.value());
-  
+
+  unpacker.unpack(data.value().begin(), data.value().end(), 1, 1);
   write_file_by_args(argc, argv, unpacker.get_result(), "a.txt");
 
   return 0;
 }
-
