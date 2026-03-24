@@ -22,7 +22,7 @@ public:
       padding = _br.get_bits<size_t>(3);
 
       _br.set_data(data, padding);
-      _br.move_forward(header_br.len());
+      _br.move_forward(header_br.get_len());
     }
 
     while(!_br.eof())

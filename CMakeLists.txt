@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 4.3)
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -flto")
 
 project(arc)
 

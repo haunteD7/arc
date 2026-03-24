@@ -40,9 +40,9 @@ public:
       _bw.put_bits(symbol_len, sym);
       _bw.put_bits(5, info.len - 1);
     }
-    size_t header_len = _bw.len();
+    size_t header_len = _bw.get_len();
     _bw.set_pos(0);
-    _bw.put_bits(header_len_len, _bw.len());
+    _bw.put_bits(header_len_len, _bw.get_len());
     _bw.move_forward(header_len);
     /* Data */
     while(!_br.eof())
@@ -159,8 +159,11 @@ int main(int argc, char const *argv[])
     return -1;
   
   HuffmanPack packer;
+  const auto start = std::chrono::steady_clock::now();
   packer.pack(data.value(), 8);
-  std::cout << packer.get_entropy() << "\n";
+  const auto end = std::chrono::steady_clock::now();
+  const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  std::cout << duration.count() << " ms\n";
   
   write_file_by_args(argc, argv, packer.get_result(), "a.bin");
   return 0;

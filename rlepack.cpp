@@ -61,7 +61,7 @@ public:
     }
 
     _bw.set_pos(padding_pos);
-    _bw.put_bits(8, _bw.len() % 8); /* Put padding */
+    _bw.put_bits(8, _bw.get_len() % 8); /* Put padding */
   }
   const std::vector<uint8_t>& get_result() { return _bw.get_data(); }
 private:
@@ -99,7 +99,7 @@ int main(int argc, char const *argv[])
   
   RLEPack packer;
 
-  packer.pack(data.value(), 4, 4);
+  packer.pack(data.value(), 4, 8);
   write_file_by_args(argc, argv, packer.get_result(), "a.bin");
 
   return 0;

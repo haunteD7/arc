@@ -133,7 +133,7 @@ public:
   {
     return _pos >= _len;
   }
-  size_t len() const /* In bits */
+  size_t get_len() const /* In bits */
   {
     return _len;
   }
