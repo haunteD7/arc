@@ -1,6 +1,4 @@
-#include "bitreader.h"
-#include "bitwriter.h"
-#include "utils.h"
+#pragma once
 
 #include <ranges>
 #include <chrono>
@@ -89,20 +87,3 @@ private:
   std::vector<uint8_t> _result;
   size_t _pos;
 };
-
-int main(int argc, char const *argv[])
-{
-  auto data = read_file_by_args(argc, argv, "a.txt");
-  if(!data.has_value())
-    return -1;
-  
-  BWTPack packer;
-  const auto start = std::chrono::steady_clock::now();
-  packer.pack(data.value().begin(), data.value().end(), 256);
-  const auto end = std::chrono::steady_clock::now();
-  const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  std::cout << duration.count() << " ms\n";
-  
-  write_file_by_args(argc, argv, packer.get_result(), "a.bin");
-  return 0;
-}

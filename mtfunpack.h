@@ -1,6 +1,7 @@
+#pragma once
+
 #include "bitreader.h"
 #include "bitwriter.h"
-#include "utils.h"
 
 class MTFUnpack
 {
@@ -33,15 +34,3 @@ private:
   BitWriter _bw;
 };
 
-int main(int argc, char const *argv[])
-{
-  auto data = read_file_by_args(argc, argv, "a.bin");
-  if(!data.has_value())
-    return -1;
-  
-  MTFUnpack unpacker;
-  unpacker.unpack(data.value(), 8);
-  
-  write_file_by_args(argc, argv, unpacker.get_result(), "a.txt");
-  return 0;
-}

@@ -1,4 +1,4 @@
-#include "utils.h"
+#pragma once
 
 #include <vector>
 #include <cstdint>
@@ -71,17 +71,3 @@ private:
 
   std::vector<uint8_t> _result;
 };
-
-int main(int argc, char const *argv[])
-{
-  auto data = read_file_by_args(argc, argv, "a.bin");
-  if (!data.has_value())
-    return -1;
-
-  RLEUnpack unpacker;
-
-  unpacker.unpack(data.value().begin(), data.value().end(), 1, 1);
-  write_file_by_args(argc, argv, unpacker.get_result(), "a.txt");
-
-  return 0;
-}

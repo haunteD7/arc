@@ -1,6 +1,7 @@
+#pragma once
+
 #include "bitreader.h"
 #include "bitwriter.h"
-#include "utils.h"
 
 class MTFPack
 {
@@ -37,16 +38,3 @@ private:
   BitReader _br;
   BitWriter _bw;
 };
-
-int main(int argc, char const *argv[])
-{
-  auto data = read_file_by_args(argc, argv, "a.txt");
-  if(!data.has_value())
-    return -1;
-  
-  MTFPack packer;
-  packer.pack(data.value(), 8);
-  
-  write_file_by_args(argc, argv, packer.get_result(), "a.bin");
-  return 0;
-}

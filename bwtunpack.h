@@ -1,3 +1,5 @@
+#pragma once
+
 #include "utils.h"
 
 #include <vector>
@@ -105,20 +107,3 @@ private:
 
   std::vector<uint8_t> _result;
 };
-
-int main(int argc, char const *argv[])
-{
-  auto data = read_file_by_args(argc, argv, "a.bin");
-  if(!data.has_value())
-    return -1;
-  
-  BWTUnpack unpacker;
-  const auto start = std::chrono::steady_clock::now();
-  unpacker.unpack(data.value().begin(), data.value().end());
-  const auto end = std::chrono::steady_clock::now();
-  const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  std::cout << duration.count() << " ms\n";
-  
-  write_file_by_args(argc, argv, unpacker.get_result(), "a.txt");
-  return 0;
-}
