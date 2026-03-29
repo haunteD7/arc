@@ -6,10 +6,10 @@
 class MTFUnpack
 {
 public:
-  void unpack(const std::vector<uint8_t>& data, uint8_t symbol_len)
+  std::vector<uint8_t> unpack(std::vector<uint8_t> data, uint8_t symbol_len)
   {
     if(data.empty())
-      return;
+      return {};
     _br.set_data(data);
     
     std::vector<uint64_t> dict(1 << symbol_len);
@@ -27,8 +27,8 @@ public:
         dict[i] = dict[i - 1];
       dict[0] = sym;
     }
+    return _bw.take_data();
   }
-  const std::vector<uint8_t>& get_result() { return _bw.get_data(); }
 private:
   BitReader _br;
   BitWriter _bw;

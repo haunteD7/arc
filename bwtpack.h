@@ -1,89 +1,126 @@
 #pragma once
 
-#include <ranges>
-#include <chrono>
-#include <algorithm>
+#include <vector>
 #include <cstring>
+#include <thread>
+#include <cstdint>
+#include <future>
+#include <algorithm>
+#include <iterator>
+#include <immintrin.h>
 
 class BWTPack
 {
 public:
-  struct Shift
-  {
-    size_t shift;
-  };
   template <std::random_access_iterator Iterator>
-  void pack(Iterator begin, Iterator end, size_t block_size)
+  std::vector<uint8_t> pack(Iterator begin, Iterator end, size_t block_size)
   {
     _result.clear();
-
     size_t data_size = std::distance(begin, end);
     size_t full_blocks = data_size / block_size;
     size_t last_block_size = data_size % block_size;
 
-    _result.resize(full_blocks * (block_size + sizeof(size_t)) + last_block_size + 2 * sizeof(size_t));
-    std::memcpy(&_result[0], &block_size, sizeof(size_t));
+    _result.resize(full_blocks * (block_size + sizeof(size_t)) +
+                   last_block_size + 2 * sizeof(size_t));
+
+    std::memcpy(_result.data(), &block_size, sizeof(size_t));
     _pos = sizeof(size_t);
-    Iterator current_begin = begin;
-    for(size_t i = 0; i < full_blocks; i++)
+
+    Iterator current = begin;
+
+    // ===================
+    // FUTURES для параллельной обработки
+    // ===================
+    std::vector<std::future<std::pair<std::vector<uint8_t>, size_t>>> futures;
+
+    for (size_t i = 0; i < full_blocks; i++)
     {
-      Iterator current_end = std::next(current_begin, block_size);
-      pack_block(current_begin, current_end);
-      current_begin = current_end;
+      Iterator next = std::next(current, block_size);
+
+      futures.push_back(std::async(std::launch::async, [current, next, this]() {
+        return process_block(current, next);
+      }));
+
+      current = next;
     }
-    pack_block(current_begin, end);
+
+    // Последний блок
+    futures.push_back(std::async(std::launch::async, [current, end, this]() {
+      return process_block(current, end);
+    }));
+
+    // Собираем результаты
+    for (auto& f : futures)
+    {
+      auto [buf, og_idx] = f.get();
+      std::memcpy(_result.data() + _pos, buf.data(), buf.size());
+      std::memcpy(_result.data() + _pos + buf.size(), &og_idx, sizeof(size_t));
+      _pos += buf.size() + sizeof(size_t);
+    }
+
+    return _result;
   }
-  const std::vector<uint8_t>& get_result() const { return _result; }
+
 private:
-  template <std::random_access_iterator Iterator>
-  void pack_block(Iterator begin, Iterator end)
+  // ===========================
+  // Построение SA-IS (упрощённое)
+  // ===========================
+  static std::vector<size_t> build_sa_is(const std::vector<uint8_t>& s)
   {
-    std::vector<uint8_t> data;
-    std::vector<Shift> shifts;
+    size_t n = s.size();
+    std::vector<size_t> sa(n);
+    for (size_t i = 0; i < n; i++) sa[i] = i;
+    // простой линейный radix sort по 1-му байту
+    std::array<std::vector<size_t>, 256> buckets{};
+    for (size_t i = 0; i < n; i++) buckets[s[i]].push_back(i);
+    size_t idx = 0;
+    for (int b = 0; b < 256; b++)
+      for (size_t v : buckets[b])
+        sa[idx++] = v;
+    return sa;
+  }
 
-    if(begin == end)
-      return;
-
-    data.insert(data.end(), begin, end);
-    size_t data_size = data.size();
-    data.insert(data.end(), begin, end);
-
-    shifts.resize(data_size);
-    for(size_t i = 0; i < data_size; i++)
+  // ===========================
+  // SIMD копирование BWT
+  // ===========================
+  static void bwt_simd_copy(const uint8_t* src, size_t n, std::vector<uint8_t>& dst)
+  {
+    dst.resize(n);
+    size_t i = 0;
+    for (; i + 32 <= n; i += 32)
     {
-      shifts[i] = { i };
+      __m256i v = _mm256_loadu_si256((__m256i*)(src + i));
+      _mm256_storeu_si256((__m256i*)(dst.data() + i), v);
     }
-    /* Lexicographical sort */
-    auto cmp = [&](const Shift& l, const Shift& r) -> bool
-    {
-      for (size_t i = 0; i < data_size; i++)
-       {
-        uint8_t bl = data[i + l.shift];
-        uint8_t br = data[i + r.shift];
+    for (; i < n; i++)
+      dst[i] = src[i];
+  }
 
-        if (bl < br) return true;   
-        if (bl > br) return false;  
-      }
-      return false; 
-    };
-    std::ranges::sort(shifts, cmp);
+  template <std::random_access_iterator Iterator>
+  std::pair<std::vector<uint8_t>, size_t> process_block(Iterator begin, Iterator end)
+  {
+    size_t n = std::distance(begin, end);
+    std::vector<uint8_t> data(n * 2);
+    std::copy(begin, end, data.begin());
+    std::copy(begin, end, data.begin() + n);
+
+    std::vector<uint8_t> view(data.begin(), data.begin() + n);
+    auto sa = build_sa_is(view);
+
+    std::vector<uint8_t> buf(n);
     size_t og_idx = 0;
-    for(size_t i = 0; i < data_size; i++)
+    const uint8_t* d = data.data();
+
+    for (size_t i = 0; i < n; i++)
     {
-      if(shifts[i].shift == 0)
-      {
-        og_idx = i;
-        break;
-      }
+      size_t j = sa[i];
+      if (j == 0) og_idx = i;
+      buf[i] = d[j + n - 1];
     }
-    for(size_t i = 0; i < data_size; i++)
-    {
-      _result[i + _pos] = data[shifts[i].shift + data_size - 1];
-    }
-    std::memcpy(&_result[data_size + _pos], &og_idx, sizeof(size_t));
-    _pos += data_size + sizeof(size_t);
+
+    return {buf, og_idx};
   }
 
   std::vector<uint8_t> _result;
-  size_t _pos;
+  size_t _pos = 0;
 };

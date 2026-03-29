@@ -1,6 +1,5 @@
 #include "bitreader.h"
 #include "bitwriter.h"
-#include "utils.h"
 #include "huffman.h"
 
 #include <memory>
@@ -12,60 +11,74 @@
 #include <queue>
 #include <unordered_map>
 
+static auto calculate_probabilities(const std::vector<uint8_t>& data)
+{
+  std::array<double, 256> result = { 0 };
+
+  double rv_len = 1.f / static_cast<double>(data.size());
+  for(auto sym : data)
+  {
+    result[sym] += rv_len;
+  }
+
+  return result;
+}
+static double calculate_entropy(const std::vector<uint8_t>& data) 
+{
+  double result = 0;
+  auto probabilities = calculate_probabilities(data);
+  for(const auto prob : probabilities)
+  {
+    if(prob > 0)
+      result += prob * -std::log2(prob);
+  }
+
+  return result;
+}
+
 class HuffmanPack
 {
 public:
-  void pack(const std::vector<uint8_t>& data, uint8_t symbol_len)
+  std::vector<uint8_t> pack(std::vector<uint8_t> data, uint8_t symbol_len_bits)
   {
     if(data.empty())
-      return;
+      return {};
     
-    size_t len = data.size() * 8 / symbol_len;
-    _br.set_data(data, len % 8);
+    size_t len = data.size() * 8 / symbol_len_bits;
+    _br.set_data(std::move(data));
     
     /* Build dictionary */
-    calculate_probabilities(symbol_len, len);
+    calculate_probabilities(symbol_len_bits, len);
     auto huffman_tree_top = std::move(build_huffman_tree());
     _dict.clear();
     build_dictionary(huffman_tree_top.get());
     
     /* Encode */
     /* Header */
-    _bw.put_bits(header_len_len, 0); /* Header size */
-    _bw.put_bits(symbol_len_len, symbol_len - 1);
-    size_t padding_pos = _bw.get_pos();
-    _bw.put_bits(3, 0); /* Padding */
+    _bw.put_bits(header_len_len_bits, 0ULL); /* Header size */
+    size_t data_len_pos = _bw.get_pos();
+    _bw.put_bits(data_len_len_bits, 0ULL); /* Data size */
     for(const auto [sym, info] : _dict)
     {
-      _bw.put_bits(symbol_len, sym);
-      _bw.put_bits(5, info.len - 1);
+      _bw.put_bits(symbol_len_bits, sym);
+      _bw.put_bits(encoded_symbol_len_len, info.len);
     }
     size_t header_len = _bw.get_len();
     _bw.set_pos(0);
-    _bw.put_bits(header_len_len, _bw.get_len());
+    _bw.put_bits(header_len_len_bits, header_len); /* Put header size */
     _bw.move_forward(header_len);
     /* Data */
     while(!_br.eof())
     {
-      OgSymbol sym = _br.get_bits<OgSymbol>(symbol_len);
+      OgSymbol sym = _br.get_bits<OgSymbol>(symbol_len_bits);
       EcSymbolInfo sym_info = _dict[sym];
       _bw.put_bits(sym_info.len, sym_info.code);
     }
-    _bw.set_pos(padding_pos);
-    _bw.put_bits(3, _bw.get_padding()); /* Put padding */
-  }
-  double get_entropy() const 
-  {
-    double result = 0;
-    for(const auto [sym, prob] : _probabilities)
-    {
-      double len = _dict.at(sym).len;
-      result += len * -std::log2(prob);
-    }
+    _bw.set_pos(data_len_pos);
+    _bw.put_bits(data_len_len_bits, _bw.get_len()); /* Put data size */
 
-    return result;
+    return _bw.take_data();
   }
-  const std::vector<uint8_t>& get_result() { return _bw.get_data(); }
 private:
   void calculate_probabilities(uint8_t symbol_len, size_t len)
   {
@@ -152,19 +165,3 @@ private:
   std::unordered_map<OgSymbol, EcSymbolInfo> _dict;
 };
 
-int main(int argc, char const *argv[])
-{
-  auto data = read_file_by_args(argc, argv, "a.txt");
-  if(!data.has_value())
-    return -1;
-  
-  HuffmanPack packer;
-  const auto start = std::chrono::steady_clock::now();
-  packer.pack(data.value(), 8);
-  const auto end = std::chrono::steady_clock::now();
-  const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  std::cout << duration.count() << " ms\n";
-  
-  write_file_by_args(argc, argv, packer.get_result(), "a.bin");
-  return 0;
-}

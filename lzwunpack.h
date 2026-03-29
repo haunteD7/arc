@@ -8,12 +8,12 @@ class LZWUnpack
 {
 public:
   template <std::random_access_iterator Iterator>
-  void unpack(Iterator begin, Iterator end, size_t max_dict_size = 4096)
+  std::vector<uint8_t> unpack(Iterator begin, Iterator end, size_t max_dict_size = 4096)
   {
     _result.clear();
 
     if (begin == end)
-      return;
+      return {};
 
     std::vector<std::vector<uint8_t>> dict(256);
 
@@ -59,10 +59,9 @@ public:
 
       prev = std::move(entry);
     }
+
+    return std::move(_result);
   }
-
-  const std::vector<uint8_t> &get_result() const { return _result; }
-
 private:
   template <typename Iterator>
   uint16_t read_code(Iterator &it)

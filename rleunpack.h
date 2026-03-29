@@ -9,7 +9,7 @@ class RLEUnpack
 {
 public:
   template <std::random_access_iterator Iterator>
-  void unpack(Iterator begin, Iterator end, size_t repeats_len_bytes, size_t symbol_len_bytes)
+  std::vector<uint8_t> unpack(Iterator begin, Iterator end, size_t repeats_len_bytes, size_t symbol_len_bytes)
   {
     _result.clear();
 
@@ -51,10 +51,9 @@ public:
           _result.insert(_result.end(), sym.begin(), sym.end());
       }
     }
+
+    return std::move(_result);
   }
-
-  const std::vector<uint8_t> &get_result() const { return _result; }
-
 private:
   // читаем little-endian integer из current и сдвигаем итератор
   template <std::random_access_iterator Iterator>

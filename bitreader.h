@@ -10,13 +10,23 @@ class BitReader
 public:
   static constexpr uint8_t BYTE_LEN = 8;
 
-  void set_data(const std::vector<uint8_t>& bytes, size_t padding = 0)
+  void set_data(const std::vector<uint8_t>& data, size_t padding = 0)
   {
-    _len = BYTE_LEN * bytes.size();
+    _len = BYTE_LEN * data.size();
     if(padding > _len)
       throw std::invalid_argument("padding can't be greater than length of data");
-
-    _data = &bytes;
+    
+    _data = &data;
+    _pos = 0;
+  }
+  void set_data(std::vector<uint8_t>&& data, size_t padding = 0)
+  {
+    _len = BYTE_LEN * data.size();
+    if(padding > _len)
+      throw std::invalid_argument("padding can't be greater than length of data");
+    
+    _owned_data = std::move(data);
+    _data = &_owned_data;
     _pos = 0;
   }
   
@@ -147,6 +157,7 @@ public:
   }
 private:
   const std::vector<uint8_t>* _data = nullptr;
+  std::vector<uint8_t> _owned_data;
 
   size_t _pos = 0;
   size_t _len = 0;

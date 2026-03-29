@@ -1,6 +1,5 @@
 #include "bitreader.h"
 #include "bitwriter.h"
-#include "utils.h"
 #include "huffman.h"
 
 #include <memory>
@@ -15,38 +14,36 @@
 
 class HuffmanUnpack
 {
-public:
-  void unpack(const std::vector<uint8_t>& data)
+  public:
+  std::vector<uint8_t> unpack(std::vector<uint8_t> data, uint8_t symbol_len)
   {
     if(data.empty())
-      return;
-
-    BitReader header_br;
-    header_br.set_data(data);
-
-    size_t header_len = header_br.get_bits<size_t>(header_len_len);
-    uint8_t symbol_len = header_br.get_bits<uint8_t>(symbol_len_len) + 1;
-    uint8_t padding = header_br.get_bits<uint8_t>(3);
+      return {};
+    
+    _br.set_data(std::move(data));
+    /* Read header */
+    size_t header_len = _br.get_bits<size_t>(header_len_len_bits);
+    size_t data_len = _br.get_bits<size_t>(data_len_len_bits);
 
     /* Canonical huffman codes */
 
-    std::vector<OgSymbolInfo> symbols;
-    symbols.reserve(header_len / (symbol_len + encoded_symbol_len_len));
+    std::vector<OgSymbolInfo> symbols(header_len / (symbol_len + encoded_symbol_len_len));
 
     /* Build array of symbols and it's encoded length */
-    while(header_br.get_pos() < header_len)
+    while(_br.get_pos() < header_len)
     {
-      OgSymbol sym = header_br.get_bits<OgSymbol>(symbol_len);
-      uint8_t len = header_br.get_bits<uint8_t>(encoded_symbol_len_len) + 1;
+      OgSymbol sym = _br.get_bits<OgSymbol>(symbol_len);
+      uint8_t len = _br.get_bits<uint8_t>(encoded_symbol_len_len);
       symbols.push_back({ sym, len });
     }
+    /* Sort */
     std::ranges::sort(symbols, [](const OgSymbolInfo& l, const OgSymbolInfo& r) {
       if(l.ec_len == r.ec_len)
         return l.code < r.code;
         
       return l.ec_len < r.ec_len;
     });
-    
+    /* Build tree */
     auto root = std::make_unique<HNode>();
     uint8_t prev_len = 0;
     uint64_t code = 0;
@@ -77,10 +74,8 @@ public:
       prev_len = sym.ec_len;
     }
       
-    _br.set_data(data, padding);
-    _br.move_forward(header_br.get_pos());
-
-    while(!_br.eof())
+    /* Decode data */
+    while(_br.get_pos() < data_len)
     {
       HNode* current = root.get();
       while(!(current->left == nullptr && current->right == nullptr))
@@ -94,22 +89,10 @@ public:
       _bw.put_bits(symbol_len, current->symbol);
       current = root.get();
     }
+
+    return _bw.take_data();
   }
-  const std::vector<uint8_t>& get_result() { return _bw.get_data(); }
 private:
   BitReader _br;
   BitWriter _bw;
 };
-
-int main(int argc, char const *argv[])
-{
-  auto data = read_file_by_args(argc, argv, "a.bin");
-  if(!data.has_value())
-    return -1;
-  
-  HuffmanUnpack unpacker;
-  unpacker.unpack(data.value());
-  
-  write_file_by_args(argc, argv, unpacker.get_result(), "a.txt");
-  return 0;
-}

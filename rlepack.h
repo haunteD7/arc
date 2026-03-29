@@ -11,12 +11,12 @@ class RLEPack
 {
 public:
   template <std::random_access_iterator Iterator>
-  void pack(Iterator begin, Iterator end, size_t repeats_len_bytes, size_t symbol_len_bytes)
+  std::vector<uint8_t> pack(Iterator begin, Iterator end, size_t repeats_len_bytes, size_t symbol_len_bytes)
   {
     _result.clear();
 
     if (begin == end)
-      return;
+      return {};
 
     size_t data_size = std::distance(begin, end);
     if (data_size % symbol_len_bytes != 0)
@@ -26,7 +26,7 @@ public:
 
     std::vector<uint8_t> literal;
 
-    // Читаем первый символ
+    /* Read first symbol */
     std::vector<uint8_t> sym(symbol_len_bytes);
     std::copy_n(begin, symbol_len_bytes, sym.begin());
     size_t repeats_num = 1;
@@ -35,7 +35,7 @@ public:
 
     while (current < end)
     {
-      // Читаем следующий символ
+      /* Read next symbol */
       std::vector<uint8_t> next_sym(symbol_len_bytes);
       std::copy_n(current, symbol_len_bytes, next_sym.begin());
 
@@ -64,7 +64,7 @@ public:
       current += symbol_len_bytes;
     }
 
-    // Финальная запись
+    /* Final write */
     if (repeats_num == 1)
     {
       literal.insert(literal.end(), sym.begin(), sym.end());
@@ -75,10 +75,9 @@ public:
       flush_literal(literal, symbol_len_bytes, repeats_len_bytes);
       put_sequence(repeats_num, sym, symbol_len_bytes, repeats_len_bytes);
     }
+
+    return std::move(_result);
   }
-
-  const std::vector<uint8_t> &get_result() const { return _result; }
-
 private:
   void put_sequence(size_t repeats_num, const std::vector<uint8_t> &sym,
                     size_t symbol_len_bytes, size_t repeats_len_bytes)
@@ -93,8 +92,8 @@ private:
     if (literal.empty())
       return;
 
-    write_integer(0, repeats_len_bytes);                                 // литерал-маркер
-    write_integer(literal.size() / symbol_len_bytes, repeats_len_bytes); // длина литералов
+    write_integer(0, repeats_len_bytes);                                 /* Literal marker */
+    write_integer(literal.size() / symbol_len_bytes, repeats_len_bytes); /* Length of literals */
     _result.insert(_result.end(), literal.begin(), literal.end());
     literal.clear();
   }

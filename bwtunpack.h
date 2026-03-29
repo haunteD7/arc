@@ -1,7 +1,5 @@
 #pragma once
 
-#include "utils.h"
-
 #include <vector>
 #include <array>
 #include <iterator>
@@ -13,13 +11,13 @@ class BWTUnpack
 {
 public:
   template <std::random_access_iterator Iterator>
-  void unpack(Iterator begin, Iterator end)
+  std::vector<uint8_t> unpack(Iterator begin, Iterator end)
   {
     _result.clear();
 
     size_t data_size = std::distance(begin, end);
     if (data_size <= sizeof(size_t))
-      return;
+      return {};
 
     /* Read block size */
     size_t block_size = 0;
@@ -44,10 +42,9 @@ public:
 
       current = block_end;
     }
+
+    return std::move(_result);
   }
-
-  const std::vector<uint8_t>& get_result() const { return _result; }
-
 private:
   template <std::random_access_iterator Iterator>
   void unpack_block(Iterator begin, Iterator end)

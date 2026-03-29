@@ -9,12 +9,12 @@ class LZSSPack
 {
 public:
   template <std::random_access_iterator Iterator>
-  void pack(Iterator begin, Iterator end,
-            size_t window_size = 4096,
-            size_t min_match = 3,
-            size_t max_match = 18)
+  std::vector<uint8_t> pack(Iterator begin, Iterator end,
+                            size_t window_size = 4096,
+                            size_t min_match = 3,
+                            size_t max_match = 18)
   {
-    _result.clear();
+    std::vector<uint8_t> result;
 
     Iterator current = begin;
 
@@ -23,62 +23,66 @@ public:
       size_t best_length = 0;
       size_t best_offset = 0;
 
-      // границы окна
-      Iterator window_begin = (current - begin > window_size)
-                                  ? current - window_size
-                                  : begin;
+      Iterator window_begin =
+          (current - begin > window_size)
+              ? current - window_size
+              : begin;
 
-      // ищем лучшее совпадение
       for (Iterator it = window_begin; it < current; ++it)
       {
+        // быстрый отсев
+        if (*it != *current)
+          continue;
+
         size_t length = 0;
 
         while (length < max_match &&
                current + length < end &&
                *(it + length) == *(current + length))
         {
-          length++;
+          ++length;
         }
 
         if (length > best_length)
         {
           best_length = length;
           best_offset = current - it;
+
+          // если уже максимум — дальше искать нет смысла
+          if (best_length == max_match)
+            break;
         }
       }
 
-      // если нашли нормальное совпадение
       if (best_length >= min_match)
       {
-        write_flag(1);
-        write_uint16(best_offset);
-        write_uint16(best_length);
+        write_flag(1, result);
+        write_uint16(static_cast<uint16_t>(best_offset), result);
+        write_uint16(static_cast<uint16_t>(best_length), result);
 
         current += best_length;
       }
       else
       {
-        write_flag(0);
-        _result.push_back(*current);
+        write_flag(0, result);
+        result.push_back(static_cast<uint8_t>(*current));
         ++current;
       }
     }
-  }
 
-  const std::vector<uint8_t> &get_result() const { return _result; }
+    return result;
+  }
 
 private:
-  void write_flag(uint8_t f)
+  void write_flag(uint8_t f, std::vector<uint8_t>& buffer)
   {
-    _result.push_back(f);
+    buffer.push_back(f);
   }
 
-  void write_uint16(uint16_t v)
+  void write_uint16(uint16_t v, std::vector<uint8_t>& buffer)
   {
     // little-endian
-    _result.push_back(v & 0xFF);
-    _result.push_back((v >> 8) & 0xFF);
+    buffer.push_back(v & 0xFF);
+    buffer.push_back((v >> 8) & 0xFF);
   }
-
-  std::vector<uint8_t> _result;
 };

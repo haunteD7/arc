@@ -9,9 +9,9 @@ class LZWPack
 {
 public:
   template <std::random_access_iterator Iterator>
-  void pack(Iterator begin, Iterator end, size_t max_dict_size = 4096)
+  std::vector<uint8_t> pack(Iterator begin, Iterator end, size_t max_dict_size = 4096)
   {
-    _result.clear();
+    std::vector<uint8_t> result;
 
     using Key = std::pair<uint16_t, uint8_t>;
 
@@ -42,7 +42,7 @@ public:
       }
       else
       {
-        write_code(w);
+        write_code(w, result);
 
         if (dict_size < max_dict_size)
           dict[key] = dict_size++;
@@ -51,18 +51,15 @@ public:
       }
     }
 
-    write_code(w);
+    write_code(w, result);
+
+    return result;
   }
-
-  const std::vector<uint8_t> &get_result() const { return _result; }
-
 private:
-  void write_code(uint16_t code)
+  void write_code(uint16_t code, std::vector<uint8_t>& buffer)
   {
     // little-endian
-    _result.push_back(code & 0xFF);
-    _result.push_back((code >> 8) & 0xFF);
+    buffer.push_back(code & 0xFF);
+    buffer.push_back((code >> 8) & 0xFF);
   }
-
-  std::vector<uint8_t> _result;
 };

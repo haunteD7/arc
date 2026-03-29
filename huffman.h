@@ -28,6 +28,6 @@ struct EcSymbolInfo
   uint8_t len;
 };
 
-static constexpr size_t header_len_len = 8;
-static constexpr size_t symbol_len_len = 5;
-static constexpr size_t encoded_symbol_len_len = 5;
+static constexpr uint8_t header_len_len_bits = 64;
+static constexpr uint8_t data_len_len_bits = 64;
+static constexpr uint8_t encoded_symbol_len_len = 8;

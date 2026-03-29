@@ -9,7 +9,7 @@ class LZSSUnpack
 {
 public:
   template <std::random_access_iterator Iterator>
-  void unpack(Iterator begin, Iterator end)
+  std::vector<uint8_t> unpack(Iterator begin, Iterator end)
   {
     _result.clear();
 
@@ -42,10 +42,9 @@ public:
         }
       }
     }
+
+    return std::move(_result);
   }
-
-  const std::vector<uint8_t> &get_result() const { return _result; }
-
 private:
   template <typename Iterator>
   uint16_t read_uint16(Iterator &it)

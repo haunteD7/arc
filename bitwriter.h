@@ -10,9 +10,15 @@ class BitWriter
 public:
   static constexpr uint8_t BYTE_LEN = 8;
 
-  const std::vector<uint8_t>& get_data()
+  const std::vector<uint8_t>& get_data() const
   {
     return _data;
+  }
+  std::vector<uint8_t> take_data()
+  {
+    _pos = 0;
+    _len = 0;
+    return std::move(_data);
   }
   
   void write(bool bit)
@@ -147,7 +153,7 @@ public:
   {
     return _len;
   }
-  size_t get_padding() const
+  uint8_t get_padding() const
   {
     return _len % BYTE_LEN;
   }
