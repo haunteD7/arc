@@ -162,13 +162,13 @@ int main(int argc, char const *argv[])
         case 2: /* RLE */
         {
           RLEUnpack rle;
-          data = rle.unpack(data.begin(), data.end(), 1, 1);
+          data = rle.unpack(data.begin(), data.end());
           break;
         }
         case 3:  /* BWT + RLE */
         {
           RLEUnpack rle;
-          data = rle.unpack(data.begin(), data.end(), 1, 1);
+          data = rle.unpack(data.begin(), data.end());
           BWTUnpack bwt;
           data = bwt.unpack(data.begin(), data.end());
           break;
@@ -188,7 +188,7 @@ int main(int argc, char const *argv[])
           HuffmanUnpack ha;
           data = ha.unpack(std::move(data), 8);
           RLEUnpack rle;
-          data = rle.unpack(data.begin(), data.end(), 1, 1);
+          data = rle.unpack(data.begin(), data.end());
           MTFUnpack mtf;
           data = mtf.unpack(std::move(data), 8);
           BWTUnpack bwt;

@@ -2,8 +2,10 @@
 #include "mtfpack.h"
 #include "huffmanpack.h"
 #include "lzsspack.h"
+#include "lzwpack.h"
 
 #include <fstream>
+#include <chrono>
 #include <sstream>
 #include <iostream>
 #include <filesystem>
@@ -34,22 +36,25 @@ void bwt_mtf_test()
     return;
 
   auto data = load_file(load_path);
-  constexpr size_t step = 64;
-  constexpr size_t iterations = 64;
+  constexpr size_t start_val = 1024; /* 1 KB */
+  constexpr size_t iterations = 10;
 
   std::stringstream ss;
-  ss << "Block size;Entropy\n";
-  for(size_t i = 1; i <= iterations; i++)  
+  ss << "Block size;Entropy;Time\n";
+  for(size_t i = 0; i <= iterations; i++)  
   {
-    size_t block_size = step * i;
-
+    size_t size = start_val * std::pow(2, i);
+    
     BWTPack bwt;
     MTFPack mtf;
-
-    auto d = bwt.pack(data.begin(), data.end(), block_size);
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    auto d = bwt.pack(data.begin(), data.end(), size);
     d = mtf.pack(std::move(d), 8);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    ss << block_size << ";" << calculate_entropy(d) << "\n";
+    ss << size << ";" << calculate_entropy(d) << ";" << duration.count() << "\n";
     std::cout << (float)(i) / (float)iterations * 100.f << " %\n";
   }
   ss.seekp(0, std::ios::end);      
@@ -66,18 +71,21 @@ void lzss_test()
 
   auto data = load_file(load_path);
 
-  constexpr size_t step = 8196;
-  constexpr size_t iterations = 64;
+  constexpr size_t start_val = 1024; /* 1 KB */
+  constexpr size_t iterations = 10;
 
   std::stringstream ss;
-  ss << "Buffer size;Compression\n";
-  for(size_t i = 1; i <= iterations; i++)  
+  ss << "Buffer size;Compression;Time\n";
+  for(size_t i = 0; i <= iterations; i++)  
   {
-    size_t buffer_size = i * step;
+    size_t size = start_val * std::pow(2, i);
     
     LZSSPack lzss;
-    float compression = (float)data.size() / (float)lzss.pack(data.begin(), data.end(), buffer_size).size();
-    ss << buffer_size << ";" << compression << "\n";
+    auto start = std::chrono::high_resolution_clock::now();
+    float compression = (float)data.size() / (float)lzss.pack(data.begin(), data.end(), size).size();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    ss << size << ";" << compression << ";" << duration.count() << "\n";
     std::cout << (float)(i) / (float)iterations * 100.f << " %\n";
   }
   ss.seekp(0, std::ios::end);      
@@ -94,18 +102,22 @@ void lzw_test()
 
   auto data = load_file(load_path);
 
-  constexpr size_t step = 8196;
-  constexpr size_t iterations = 64;
+  constexpr size_t start_val = 1024; /* 1 KB */
+  constexpr size_t iterations = 10;
 
   std::stringstream ss;
-  ss << "Dictionary size;Compression\n";
-  for(size_t i = 1; i <= iterations; i++)  
+  ss << "Dictionary size;Compression;Time\n";
+  for(size_t i = 0; i <= iterations; i++)  
   {
-    size_t dictionary_size = i * step;
+    size_t size = start_val * std::pow(2, i);
     
-    LZSSPack lzss;
-    float compression = (float)data.size() / (float)lzss.pack(data.begin(), data.end(), dictionary_size).size();
-    ss << dictionary_size << ";" << compression << "\n";
+    LZWPack lzw;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    float compression = (float)data.size() / (float)lzw.pack(data.begin(), data.end(), size).size();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    ss << size << ";" << compression << ";" << duration.count() << "\n";
     std::cout << (float)i / (float)iterations * 100.f << " %\n";
   }
   ss.seekp(0, std::ios::end);      

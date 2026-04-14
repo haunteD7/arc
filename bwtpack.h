@@ -1,126 +1,168 @@
 #pragma once
 
-#include <vector>
-#include <cstring>
-#include <thread>
-#include <cstdint>
-#include <future>
+#include <ranges>
+#include <chrono>
 #include <algorithm>
-#include <iterator>
-#include <immintrin.h>
+#include <cstring>
+#include <vector>
+#include <cstdint>
 
 class BWTPack
 {
 public:
+  struct Shift
+  {
+    size_t shift;
+  };
+  
   template <std::random_access_iterator Iterator>
   std::vector<uint8_t> pack(Iterator begin, Iterator end, size_t block_size)
   {
     _result.clear();
+
     size_t data_size = std::distance(begin, end);
     size_t full_blocks = data_size / block_size;
     size_t last_block_size = data_size % block_size;
 
-    _result.resize(full_blocks * (block_size + sizeof(size_t)) +
-                   last_block_size + 2 * sizeof(size_t));
-
-    std::memcpy(_result.data(), &block_size, sizeof(size_t));
+    _result.resize(full_blocks * (block_size + sizeof(size_t)) + last_block_size + 2 * sizeof(size_t));
+    std::memcpy(&_result[0], &block_size, sizeof(size_t));
     _pos = sizeof(size_t);
-
-    Iterator current = begin;
-
-    // ===================
-    // FUTURES для параллельной обработки
-    // ===================
-    std::vector<std::future<std::pair<std::vector<uint8_t>, size_t>>> futures;
-
-    for (size_t i = 0; i < full_blocks; i++)
+    Iterator current_begin = begin;
+    for(size_t i = 0; i < full_blocks; i++)
     {
-      Iterator next = std::next(current, block_size);
-
-      futures.push_back(std::async(std::launch::async, [current, next, this]() {
-        return process_block(current, next);
-      }));
-
-      current = next;
+      Iterator current_end = std::next(current_begin, block_size);
+      pack_block(current_begin, current_end);
+      current_begin = current_end;
     }
+    pack_block(current_begin, end);
 
-    // Последний блок
-    futures.push_back(std::async(std::launch::async, [current, end, this]() {
-      return process_block(current, end);
-    }));
-
-    // Собираем результаты
-    for (auto& f : futures)
-    {
-      auto [buf, og_idx] = f.get();
-      std::memcpy(_result.data() + _pos, buf.data(), buf.size());
-      std::memcpy(_result.data() + _pos + buf.size(), &og_idx, sizeof(size_t));
-      _pos += buf.size() + sizeof(size_t);
-    }
-
-    return _result;
+    return std::move(_result);
   }
-
+  
 private:
-  // ===========================
-  // Построение SA-IS (упрощённое)
-  // ===========================
-  static std::vector<size_t> build_sa_is(const std::vector<uint8_t>& s)
-  {
-    size_t n = s.size();
-    std::vector<size_t> sa(n);
-    for (size_t i = 0; i < n; i++) sa[i] = i;
-    // простой линейный radix sort по 1-му байту
-    std::array<std::vector<size_t>, 256> buckets{};
-    for (size_t i = 0; i < n; i++) buckets[s[i]].push_back(i);
-    size_t idx = 0;
-    for (int b = 0; b < 256; b++)
-      for (size_t v : buckets[b])
-        sa[idx++] = v;
-    return sa;
-  }
-
-  // ===========================
-  // SIMD копирование BWT
-  // ===========================
-  static void bwt_simd_copy(const uint8_t* src, size_t n, std::vector<uint8_t>& dst)
-  {
-    dst.resize(n);
-    size_t i = 0;
-    for (; i + 32 <= n; i += 32)
-    {
-      __m256i v = _mm256_loadu_si256((__m256i*)(src + i));
-      _mm256_storeu_si256((__m256i*)(dst.data() + i), v);
-    }
-    for (; i < n; i++)
-      dst[i] = src[i];
-  }
-
+  // Эффективное вычисление BWT с использованием суффиксного массива для циклических сдвигов
   template <std::random_access_iterator Iterator>
-  std::pair<std::vector<uint8_t>, size_t> process_block(Iterator begin, Iterator end)
+  void pack_block(Iterator begin, Iterator end)
   {
+    if(begin == end)
+      return;
+
     size_t n = std::distance(begin, end);
-    std::vector<uint8_t> data(n * 2);
-    std::copy(begin, end, data.begin());
-    std::copy(begin, end, data.begin() + n);
-
-    std::vector<uint8_t> view(data.begin(), data.begin() + n);
-    auto sa = build_sa_is(view);
-
-    std::vector<uint8_t> buf(n);
-    size_t og_idx = 0;
-    const uint8_t* d = data.data();
-
-    for (size_t i = 0; i < n; i++)
+    
+    // Копируем данные для обработки
+    std::vector<uint8_t> data;
+    data.reserve(n);
+    data.insert(data.end(), begin, end);
+    
+    // Для BWT нужны циклические сдвиги, поэтому дублируем данные
+    // Это позволяет работать с циклическими сдвигами как с линейными суффиксами
+    std::vector<uint8_t> cyclic_data;
+    cyclic_data.reserve(2 * n);
+    cyclic_data.insert(cyclic_data.end(), data.begin(), data.end());
+    cyclic_data.insert(cyclic_data.end(), data.begin(), data.end());
+    
+    // Строим суффиксный массив для дублированных данных, но только для позиций 0..n-1
+    std::vector<size_t> suffix_array = build_suffix_array(cyclic_data, n);
+    
+    // Находим индекс исходной строки в BWT
+    size_t original_index = 0;
+    for(size_t i = 0; i < n; i++)
     {
-      size_t j = sa[i];
-      if (j == 0) og_idx = i;
-      buf[i] = d[j + n - 1];
+      if(suffix_array[i] == 0)
+      {
+        original_index = i;
+        break;
+      }
     }
-
-    return {buf, og_idx};
+    
+    // Формируем BWT: последний символ каждого циклического сдвига
+    // Для суффикса, начинающегося в позиции pos, последний символ циклического сдвига
+    // находится на позиции (pos + n - 1) в дублированных данных
+    for(size_t i = 0; i < n; i++)
+    {
+      size_t pos = suffix_array[i];
+      _result[_pos + i] = cyclic_data[pos + n - 1];
+    }
+    
+    // Сохраняем индекс исходной строки
+    std::memcpy(&_result[n + _pos], &original_index, sizeof(size_t));
+    _pos += n + sizeof(size_t);
+  }
+  
+  // Построение суффиксного массива за O(n log n) с использованием удвоения
+  std::vector<size_t> build_suffix_array(const std::vector<uint8_t>& data, size_t limit)
+  {
+    size_t n = data.size();
+    std::vector<size_t> suffix_array(n);
+    std::vector<size_t> rank(n);
+    std::vector<size_t> new_rank(n);
+    
+    // Инициализация: суффиксы по первому символу
+    for(size_t i = 0; i < n; i++)
+    {
+      suffix_array[i] = i;
+      rank[i] = data[i];
+    }
+    
+    // Сортировка с использованием компаратора
+    auto cmp = [&](size_t a, size_t b) -> bool
+    {
+      if(rank[a] != rank[b])
+        return rank[a] < rank[b];
+      size_t ra = (a + 1 < n) ? rank[a + 1] : 0;
+      size_t rb = (b + 1 < n) ? rank[b + 1] : 0;
+      return ra < rb;
+    };
+    
+    std::sort(suffix_array.begin(), suffix_array.end(), cmp);
+    
+    // Пересчет рангов
+    new_rank[suffix_array[0]] = 0;
+    for(size_t i = 1; i < n; i++)
+    {
+      new_rank[suffix_array[i]] = new_rank[suffix_array[i - 1]] + 
+        (cmp(suffix_array[i - 1], suffix_array[i]) ? 1 : 0);
+    }
+    rank.swap(new_rank);
+    
+    // Удвоение
+    for(size_t k = 2; k < n; k <<= 1)
+    {
+      auto cmp_k = [&](size_t a, size_t b) -> bool
+      {
+        if(rank[a] != rank[b])
+          return rank[a] < rank[b];
+        size_t ra = (a + k/2 < n) ? rank[a + k/2] : 0;
+        size_t rb = (b + k/2 < n) ? rank[b + k/2] : 0;
+        return ra < rb;
+      };
+      
+      std::sort(suffix_array.begin(), suffix_array.end(), cmp_k);
+      
+      new_rank[suffix_array[0]] = 0;
+      for(size_t i = 1; i < n; i++)
+      {
+        new_rank[suffix_array[i]] = new_rank[suffix_array[i - 1]] + 
+          (cmp_k(suffix_array[i - 1], suffix_array[i]) ? 1 : 0);
+      }
+      rank.swap(new_rank);
+      
+      if(rank[suffix_array[n - 1]] == n - 1)
+        break;
+    }
+    
+    // Фильтруем только нужные позиции (0..limit-1)
+    std::vector<size_t> result;
+    result.reserve(limit);
+    for(size_t i = 0; i < n && result.size() < limit; i++)
+    {
+      if(suffix_array[i] < limit)
+        result.push_back(suffix_array[i]);
+    }
+    
+    return result;
   }
 
   std::vector<uint8_t> _result;
-  size_t _pos = 0;
+  size_t _pos;
 };

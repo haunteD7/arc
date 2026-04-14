@@ -11,7 +11,7 @@ class RLEPack
 {
 public:
   template <std::random_access_iterator Iterator>
-  std::vector<uint8_t> pack(Iterator begin, Iterator end, size_t repeats_len_bytes, size_t symbol_len_bytes)
+  std::vector<uint8_t> pack(Iterator begin, Iterator end, uint8_t repeats_len_bytes, uint8_t symbol_len_bytes)
   {
     _result.clear();
 
@@ -21,6 +21,10 @@ public:
     size_t data_size = std::distance(begin, end);
     if (data_size % symbol_len_bytes != 0)
       throw std::out_of_range("Data size not divisible by symbol length");
+
+    _result.reserve(data_size / 2);
+    _result.push_back(repeats_len_bytes);
+    _result.push_back(symbol_len_bytes);
 
     const size_t max_repeats = (1ULL << (repeats_len_bytes * 8)) - 1;
 

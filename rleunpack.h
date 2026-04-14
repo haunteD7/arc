@@ -9,11 +9,16 @@ class RLEUnpack
 {
 public:
   template <std::random_access_iterator Iterator>
-  std::vector<uint8_t> unpack(Iterator begin, Iterator end, size_t repeats_len_bytes, size_t symbol_len_bytes)
+  std::vector<uint8_t> unpack(Iterator begin, Iterator end)
   {
     _result.clear();
-
+    
     Iterator current = begin;
+    uint8_t repeats_len_bytes = *current; ++current;
+    uint8_t symbol_len_bytes = *current; ++current;
+
+    size_t data_size = std::distance(current, end);
+    _result.reserve(data_size * 2);
 
     while (current < end)
     {
