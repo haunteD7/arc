@@ -2,18 +2,91 @@
 #include <filesystem>
 #include <fstream>
 
-#include "bwtpack.h"
 #include "bwtunpack.h"
-#include "huffmanpack.h"
 #include "huffmanunpack.h"
-#include "rlepack.h"
 #include "rleunpack.h"
-#include "mtfpack.h"
 #include "mtfunpack.h"
-#include "lzwpack.h"
 #include "lzwunpack.h"
-#include "lzsspack.h"
 #include "lzssunpack.h"
+
+#include "compress.h"
+
+void decompress(int compressor, std::vector<uint8_t> &data)
+{
+  switch (compressor)
+  {
+  case 1: /* Huffman */
+  {
+    HuffmanUnpack ha;
+    data = ha.unpack(std::move(data), 8);
+    break;
+  }
+  case 2: /* RLE */
+  {
+    RLEUnpack rle;
+    data = rle.unpack(data.begin(), data.end());
+    break;
+  }
+  case 3: /* BWT + RLE */
+  {
+    RLEUnpack rle;
+    data = rle.unpack(data.begin(), data.end());
+    BWTUnpack bwt;
+    data = bwt.unpack(data.begin(), data.end());
+    break;
+  }
+  case 4: /* BWT + MTF + HA */
+  {
+    HuffmanUnpack ha;
+    data = ha.unpack(std::move(data), 8);
+    MTFUnpack mtf;
+    data = mtf.unpack(std::move(data), 8);
+    BWTUnpack bwt;
+    data = bwt.unpack(data.begin(), data.end());
+    break;
+  }
+  case 5: /* 5. BWT + MTF + RLE + HA */
+  {
+    HuffmanUnpack ha;
+    data = ha.unpack(std::move(data), 8);
+    RLEUnpack rle;
+    data = rle.unpack(data.begin(), data.end());
+    MTFUnpack mtf;
+    data = mtf.unpack(std::move(data), 8);
+    BWTUnpack bwt;
+    data = bwt.unpack(data.begin(), data.end());
+    break;
+  }
+  case 6: /* LZSS */
+  {
+    LZSSUnpack lzss;
+    data = lzss.unpack(data);
+    break;
+  }
+  case 7: /* LZSS + HA */
+  {
+    HuffmanUnpack ha;
+    data = ha.unpack(std::move(data), 8);
+    LZSSUnpack lzss;
+    data = lzss.unpack(data);
+    break;
+  }
+  case 8: /* LZW */
+  {
+    LZWUnpack lzw;
+    data = lzw.unpack(data, 8192);
+    break;
+  }
+  case 9: /* LZW + HA */
+  {
+    HuffmanUnpack ha;
+    data = ha.unpack(std::move(data), 8);
+    LZWUnpack lzw;
+    data = lzw.unpack(data, 8192);
+    break;
+  }
+  }
+}
 
 int main(int argc, char const *argv[])
 {
@@ -52,7 +125,7 @@ int main(int argc, char const *argv[])
   std::cin >> save_path;
 
   std::ifstream in_fs(load_path, std::ios::binary);
-  if(!in_fs.is_open())
+  if (!in_fs.is_open())
   {
     std::cerr << "Can't open file to read " << load_path << "\n";
     return -1;
@@ -65,7 +138,7 @@ int main(int argc, char const *argv[])
     return -1;
   }
   std::vector<uint8_t> data(data_size);
-  if(!in_fs.read((char*)data.data(), data_size))
+  if (!in_fs.read((char *)data.data(), data_size))
   {
     std::cerr << "Error reading file\n";
     return -1;
@@ -73,172 +146,28 @@ int main(int argc, char const *argv[])
 
   try
   {
-    if(cd == 'c')
+    if (cd == 'c')
     {
-      switch(compressor)
-      {
-        case 1: /* Huffman */
-        {
-          HuffmanPack ha;
-          data = ha.pack(std::move(data), 8);
-          break;
-        }
-        case 2: /* RLE */
-        {
-          RLEPack rle;
-          data = rle.pack(data.begin(), data.end(), 1, 1);
-          break;
-        }
-        case 3:  /* BWT + RLE */
-        {
-          BWTPack bwt;
-          data = bwt.pack(data.begin(), data.end(), 256);
-          RLEPack rle;
-          data = rle.pack(data.begin(), data.end(), 1, 1);
-          break;
-        }
-        case 4: /* BWT + MTF + HA */
-        {
-          BWTPack bwt;
-          data = bwt.pack(data.begin(), data.end(), 256);
-          MTFPack mtf;
-          data = mtf.pack(std::move(data), 8);
-          HuffmanPack ha;
-          data = ha.pack(std::move(data), 8);
-          break;
-        }
-        case 5: /* 5. BWT + MTF + RLE + HA */
-        {
-          BWTPack bwt;
-          data = bwt.pack(data.begin(), data.end(), 256);
-          MTFPack mtf;
-          data = mtf.pack(std::move(data), 8);
-          RLEPack rle;
-          data = rle.pack(data.begin(), data.end(), 1, 1);
-          HuffmanPack ha;
-          data = ha.pack(std::move(data), 8);
-          break;
-        }
-        case 6: /* LZSS */
-        {
-          LZSSPack lzss;
-          data = lzss.pack(data.begin(), data.end());
-          break;
-        }
-        case 7: /* LZSS + HA */
-        {
-          LZSSPack lzss;
-          data = lzss.pack(data.begin(), data.end());
-          HuffmanPack ha;
-          data = ha.pack(std::move(data), 8);
-          break;
-        }
-        case 8: /* LZW */
-        {
-          LZWPack lzw;
-          data = lzw.pack(data.begin(), data.end());
-          break;
-        }
-        case 9: /* LZW + HA */
-        {
-          LZWPack lzw;
-          data = lzw.pack(data.begin(), data.end());
-          HuffmanPack ha;
-          data = ha.pack(std::move(data), 8);
-          break;
-        }
-      }
+      compress(compressor, data);
     }
-    else if(cd == 'd')
+    else if (cd == 'd')
     {
-      switch(compressor)
-      {
-        case 1: /* Huffman */
-        {
-          HuffmanUnpack ha;
-          data = ha.unpack(std::move(data), 8);
-          break;
-        }
-        case 2: /* RLE */
-        {
-          RLEUnpack rle;
-          data = rle.unpack(data.begin(), data.end());
-          break;
-        }
-        case 3:  /* BWT + RLE */
-        {
-          RLEUnpack rle;
-          data = rle.unpack(data.begin(), data.end());
-          BWTUnpack bwt;
-          data = bwt.unpack(data.begin(), data.end());
-          break;
-        }
-        case 4: /* BWT + MTF + HA */
-        {
-          HuffmanUnpack ha;
-          data = ha.unpack(std::move(data), 8);
-          MTFUnpack mtf;
-          data = mtf.unpack(std::move(data), 8);
-          BWTUnpack bwt;
-          data = bwt.unpack(data.begin(), data.end());
-          break;
-        }
-        case 5: /* 5. BWT + MTF + RLE + HA */
-        {
-          HuffmanUnpack ha;
-          data = ha.unpack(std::move(data), 8);
-          RLEUnpack rle;
-          data = rle.unpack(data.begin(), data.end());
-          MTFUnpack mtf;
-          data = mtf.unpack(std::move(data), 8);
-          BWTUnpack bwt;
-          data = bwt.unpack(data.begin(), data.end());
-          break;
-        }
-        case 6: /* LZSS */
-        {
-          LZSSUnpack lzss;
-          data = lzss.unpack(data.begin(), data.end());
-          break;
-        }
-        case 7: /* LZSS + HA */
-        {
-          HuffmanUnpack ha;
-          data = ha.unpack(std::move(data), 8);
-          LZSSUnpack lzss;
-          data = lzss.unpack(data.begin(), data.end());
-          break;
-        }
-        case 8: /* LZW */
-        {
-          LZWUnpack lzw;
-          data = lzw.unpack(data.begin(), data.end());
-          break;
-        }
-        case 9: /* LZW + HA */
-        {
-          HuffmanUnpack ha;
-          data = ha.unpack(std::move(data), 8);
-          LZWUnpack lzw;
-          data = lzw.unpack(data.begin(), data.end());
-          break;
-        }
-      }
+      decompress(compressor, data);
     }
   }
-  catch(const std::exception& e)
+  catch (const std::exception &e)
   {
     std::cerr << "Error: file is damaged\n";
     return -1;
   }
 
   std::ofstream out_fs(save_path, std::ios::binary);
-  if(!out_fs.is_open())
+  if (!out_fs.is_open())
   {
     std::cerr << "Can't open file to write " << save_path << "\n";
     return -1;
   }
-  if(!out_fs.write(reinterpret_cast<const char*>(data.data()), data.size()))
+  if (!out_fs.write(reinterpret_cast<const char *>(data.data()), data.size()))
   {
     std::cerr << "Error writing file\n";
     return -1;

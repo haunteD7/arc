@@ -3,49 +3,69 @@
 #include <vector>
 #include <unordered_map>
 #include <cstdint>
-#include <iterator>
+#include <utility>
 
 class LZWPack
 {
 public:
-  template <std::random_access_iterator Iterator>
-  std::vector<uint8_t> pack(Iterator begin, Iterator end, size_t max_dict_size = 4096)
+  std::vector<uint8_t> pack(const std::vector<uint8_t>& input,
+                            size_t max_dict_size = 4096)
   {
     std::vector<uint8_t> result;
 
-    using Key = std::pair<uint16_t, uint8_t>;
+    if (input.empty())
+      return result;
+
+    struct Key
+    {
+      uint16_t w;
+      uint8_t k;
+
+      bool operator==(const Key& other) const
+      {
+        return w == other.w && k == other.k;
+      }
+    };
 
     struct KeyHash
     {
-      size_t operator()(const Key &k) const
+      size_t operator()(const Key& key) const
       {
-        return (static_cast<size_t>(k.first) << 8) ^ k.second;
+        return (static_cast<size_t>(key.w) << 8) ^ key.k;
       }
     };
 
     std::unordered_map<Key, uint16_t, KeyHash> dict;
+    dict.reserve(1 << 16);
 
     uint16_t dict_size = 256;
 
-    // начальное состояние
-    uint16_t w = *begin;
-    ++begin;
+    const uint8_t* data = input.data();
+    size_t size = input.size();
 
-    for (auto it = begin; it != end; ++it)
+    size_t i = 0;
+
+    uint16_t w = data[i++];
+
+    while (i < size)
     {
-      uint8_t k = *it;
-      Key key = {w, k};
+      uint8_t k = data[i++];
+      Key key{w, k};
 
-      if (dict.contains(key))
+      auto it = dict.find(key);
+
+      if (it != dict.end())
       {
-        w = dict[key];
+        w = it->second;
       }
       else
       {
         write_code(w, result);
 
         if (dict_size < max_dict_size)
+        {
           dict[key] = dict_size++;
+        }
 
         w = k;
       }
@@ -55,11 +75,11 @@ public:
 
     return result;
   }
+
 private:
   void write_code(uint16_t code, std::vector<uint8_t>& buffer)
   {
-    // little-endian
     buffer.push_back(code & 0xFF);
     buffer.push_back((code >> 8) & 0xFF);
   }
-};
+};  

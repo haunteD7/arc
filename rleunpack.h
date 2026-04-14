@@ -27,10 +27,10 @@ public:
       if (remaining < repeats_len_bytes)
         throw std::out_of_range("Not enough data for repeat count");
 
-      // читаем повторения или литерал-маркер
+      // read repeats or literal marker
       size_t repeats_num = read_integer(current, repeats_len_bytes);
 
-      if (repeats_num == 0) // литерал
+      if (repeats_num == 0) // literal
       {
         if (std::distance(current, end) < repeats_len_bytes)
           throw std::out_of_range("Not enough data for literal length");
@@ -44,7 +44,7 @@ public:
         _result.insert(_result.end(), current, current + literal_bytes);
         current += literal_bytes;
       }
-      else // повторяющийся символ
+      else // repeating symbol
       {
         if (std::distance(current, end) < symbol_len_bytes)
           throw std::out_of_range("Not enough data for repeated symbol");
@@ -60,7 +60,7 @@ public:
     return std::move(_result);
   }
 private:
-  // читаем little-endian integer из current и сдвигаем итератор
+  // read little endian integer and move iterator
   template <std::random_access_iterator Iterator>
   size_t read_integer(Iterator &it, size_t bytes)
   {

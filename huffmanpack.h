@@ -1,3 +1,5 @@
+#pragma once
+
 #include "bitreader.h"
 #include "bitwriter.h"
 #include "huffman.h"

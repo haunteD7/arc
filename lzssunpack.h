@@ -2,59 +2,66 @@
 
 #include <vector>
 #include <cstdint>
-#include <iterator>
 #include <stdexcept>
 
 class LZSSUnpack
 {
 public:
-  template <std::random_access_iterator Iterator>
-  std::vector<uint8_t> unpack(Iterator begin, Iterator end)
+  std::vector<uint8_t> unpack(const std::vector<uint8_t>& input)
   {
-    _result.clear();
+    std::vector<uint8_t> result;
 
-    Iterator current = begin;
+    const uint8_t* data = input.data();
+    size_t size = input.size();
 
-    while (current < end)
+    size_t current = 0;
+
+    while (current < size)
     {
-      uint8_t flag = *current++;
+      uint8_t flag = data[current++];
 
+      // literal
       if (flag == 0)
       {
-        if (current >= end)
-          throw std::runtime_error("Unexpected end");
+        if (current >= size)
+          throw std::runtime_error("Unexpected end of data");
 
-        _result.push_back(*current++);
+        result.push_back(data[current++]);
       }
+      // match
       else
       {
-        if (std::distance(current, end) < 4)
+        if (current + 4 > size)
           throw std::runtime_error("Bad compressed data");
 
-        uint16_t offset = read_uint16(current);
-        uint16_t length = read_uint16(current);
+        uint16_t offset = read_uint16(data, current, size);
+        uint16_t length = read_uint16(data, current, size);
 
-        size_t start = _result.size() - offset;
+        if (offset == 0 || offset > result.size())
+          throw std::runtime_error("Invalid offset");
 
-        for (size_t i = 0; i < length; i++)
+        size_t start = result.size() - offset;
+
+        for (size_t i = 0; i < length; ++i)
         {
-          _result.push_back(_result[start + i]);
+          result.push_back(result[start + i]);
         }
       }
     }
 
-    return std::move(_result);
-  }
-private:
-  template <typename Iterator>
-  uint16_t read_uint16(Iterator &it)
-  {
-    uint16_t v = *it;
-    ++it;
-    v |= static_cast<uint16_t>(*it) << 8;
-    ++it;
-    return v;
+    return result;
   }
 
-  std::vector<uint8_t> _result;
+private:
+  uint16_t read_uint16(const uint8_t* data, size_t& pos, size_t size)
+  {
+    if (pos + 2 > size)
+      throw std::runtime_error("Unexpected end while reading uint16");
+
+    uint16_t v = data[pos];
+    v |= static_cast<uint16_t>(data[pos + 1]) << 8;
+
+    pos += 2;
+    return v;
+  }
 };

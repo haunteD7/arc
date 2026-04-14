@@ -3,6 +3,7 @@
 #include "huffmanpack.h"
 #include "lzsspack.h"
 #include "lzwpack.h"
+#include "compress.h"
 
 #include <fstream>
 #include <chrono>
@@ -52,9 +53,9 @@ void bwt_mtf_test()
     auto d = bwt.pack(data.begin(), data.end(), size);
     d = mtf.pack(std::move(d), 8);
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::chrono::duration<double> duration = end - start;
 
-    ss << size << ";" << calculate_entropy(d) << ";" << duration.count() << "\n";
+    ss << size / 1024 << ";" << calculate_entropy(d) << ";" << duration.count() << "\n";
     std::cout << (float)(i) / (float)iterations * 100.f << " %\n";
   }
   ss.seekp(0, std::ios::end);      
@@ -82,10 +83,10 @@ void lzss_test()
     
     LZSSPack lzss;
     auto start = std::chrono::high_resolution_clock::now();
-    float compression = (float)data.size() / (float)lzss.pack(data.begin(), data.end(), size).size();
+    float compression = (float)data.size() / (float)lzss.pack(data, size).size();
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    ss << size << ";" << compression << ";" << duration.count() << "\n";
+    std::chrono::duration<double> duration = end - start;
+    ss << size / 1024 << ";" << compression << ";" << duration.count() << "\n";
     std::cout << (float)(i) / (float)iterations * 100.f << " %\n";
   }
   ss.seekp(0, std::ios::end);      
@@ -102,7 +103,7 @@ void lzw_test()
 
   auto data = load_file(load_path);
 
-  constexpr size_t start_val = 1024; /* 1 KB */
+  constexpr size_t start_val = 32; 
   constexpr size_t iterations = 10;
 
   std::stringstream ss;
@@ -114,10 +115,10 @@ void lzw_test()
     LZWPack lzw;
 
     auto start = std::chrono::high_resolution_clock::now();
-    float compression = (float)data.size() / (float)lzw.pack(data.begin(), data.end(), size).size();
+    float compression = (float)data.size() / (float)lzw.pack(data, size).size();
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    ss << size << ";" << compression << ";" << duration.count() << "\n";
+    std::chrono::duration<double> duration = end - start;
+    ss << (float)size / 1024.f << ";" << compression << ";" << duration.count() << "\n";
     std::cout << (float)i / (float)iterations * 100.f << " %\n";
   }
   ss.seekp(0, std::ios::end);      
@@ -125,8 +126,40 @@ void lzw_test()
   out_fs.write(ss.str().c_str(), ss.tellp());
 }
 
+std::string files[] =
+{
+  "color.bmp",
+  "grey.bmp",
+  "bw.bmp",
+  "ru.txt",
+  "enwik7.txt",
+  "helldivers2.exe",
+};
+
 int main(int argc, char const *argv[])
 {
+  std::cout << "Start benchmark: y/n: ";
+  char yn;
+  std::cin >> yn;
+  if(yn == 'y')
+  {
+    std::stringstream ss; 
+    ss << "File name;Compression;Algorithm\n";
+    for(int cmpr = 0; cmpr < sizeof(compressor_names) / sizeof(*compressor_names); cmpr++)
+    {
+      for(int file = 0; file < sizeof(files) / sizeof(*files); file++)
+      {
+        auto file_data = load_file(file[files]);
+        size_t og_size = file_data.size();
+        compress(cmpr + 1, file_data);
+        ss << files[file] << ";" << (float)og_size / (float)file_data.size() << ";" << compressor_names[cmpr] << "\n";
+      }
+    }
+    ss.seekp(0, std::ios::end);      
+    std::ofstream out_fs("benchmark.csv");
+    out_fs.write(ss.str().c_str(), ss.tellp());
+  }
+
   bwt_mtf_test();
   lzss_test();
   lzw_test();

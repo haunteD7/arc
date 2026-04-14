@@ -2,34 +2,52 @@
 
 #include <vector>
 #include <cstdint>
-#include <iterator>
+#include <stdexcept>
 
 class LZWUnpack
 {
 public:
-  template <std::random_access_iterator Iterator>
-  std::vector<uint8_t> unpack(Iterator begin, Iterator end, size_t max_dict_size = 4096)
+  std::vector<uint8_t> unpack(const std::vector<uint8_t>& input,
+                              size_t max_dict_size = 4096)
   {
-    _result.clear();
+    std::vector<uint8_t> result;
 
-    if (begin == end)
-      return {};
+    if (input.size() < 2)
+      return result;
 
     std::vector<std::vector<uint8_t>> dict(256);
 
-    for (int i = 0; i < 256; i++)
+    for (int i = 0; i < 256; ++i)
       dict[i] = {static_cast<uint8_t>(i)};
 
     uint16_t dict_size = 256;
 
-    uint16_t prev_code = read_code(begin);
-    auto prev = dict[prev_code];
+    const uint8_t* data = input.data();
+    size_t size = input.size();
+    size_t pos = 0;
 
-    _result.insert(_result.end(), prev.begin(), prev.end());
-
-    while (begin < end)
+    auto read_code = [&](size_t& p) -> uint16_t
     {
-      uint16_t code = read_code(begin);
+      if (p + 2 > size)
+        throw std::runtime_error("Unexpected end");
+
+      uint16_t code = data[p];
+      code |= static_cast<uint16_t>(data[p + 1]) << 8;
+      p += 2;
+      return code;
+    };
+
+    uint16_t prev_code = read_code(pos);
+
+    if (prev_code >= dict.size())
+      throw std::runtime_error("Bad LZW stream");
+
+    std::vector<uint8_t> prev = dict[prev_code];
+    result.insert(result.end(), prev.begin(), prev.end());
+
+    while (pos < size)
+    {
+      uint16_t code = read_code(pos);
 
       std::vector<uint8_t> entry;
 
@@ -47,31 +65,19 @@ public:
         throw std::runtime_error("Bad LZW code");
       }
 
-      _result.insert(_result.end(), entry.begin(), entry.end());
+      result.insert(result.end(), entry.begin(), entry.end());
 
       if (dict_size < max_dict_size)
       {
-        auto new_entry = prev;
+        std::vector<uint8_t> new_entry = prev;
         new_entry.push_back(entry[0]);
         dict.push_back(std::move(new_entry));
-        dict_size++;
+        ++dict_size;
       }
 
       prev = std::move(entry);
     }
 
-    return std::move(_result);
+    return result;
   }
-private:
-  template <typename Iterator>
-  uint16_t read_code(Iterator &it)
-  {
-    uint16_t code = *it;
-    ++it;
-    code |= static_cast<uint16_t>(*it) << 8;
-    ++it;
-    return code;
-  }
-
-  std::vector<uint8_t> _result;
 };
