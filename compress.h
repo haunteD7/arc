@@ -69,13 +69,13 @@ void compress(int compressor, std::vector<uint8_t> &data)
   case 6: /* LZSS */
   {
     LZSSPack lzss;
-    data = lzss.pack(data, 16384);
+    data = lzss.pack(data, 4095);
     break;
   }
   case 7: /* LZSS + HA */
   {
     LZSSPack lzss;
-    data = lzss.pack(data);
+    data = lzss.pack(data, 4095);
     HuffmanPack ha;
     data = ha.pack(std::move(data), 8);
     break;
@@ -83,13 +83,13 @@ void compress(int compressor, std::vector<uint8_t> &data)
   case 8: /* LZW */
   {
     LZWPack lzw;
-    data = lzw.pack(data, 8192);
+    data = lzw.pack(data, 30720);
     break;
   }
   case 9: /* LZW + HA */
   {
     LZWPack lzw;
-    data = lzw.pack(data, 8192);
+    data = lzw.pack(data, 30720);
     HuffmanPack ha;
     data = ha.pack(std::move(data), 8);
     break;

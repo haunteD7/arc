@@ -74,7 +74,7 @@ void decompress(int compressor, std::vector<uint8_t> &data)
   case 8: /* LZW */
   {
     LZWUnpack lzw;
-    data = lzw.unpack(data, 8192);
+    data = lzw.unpack(data, 30720);
     break;
   }
   case 9: /* LZW + HA */
@@ -82,7 +82,7 @@ void decompress(int compressor, std::vector<uint8_t> &data)
     HuffmanUnpack ha;
     data = ha.unpack(std::move(data), 8);
     LZWUnpack lzw;
-    data = lzw.unpack(data, 8192);
+    data = lzw.unpack(data, 30720);
     break;
   }
   }

@@ -72,21 +72,21 @@ void lzss_test()
 
   auto data = load_file(load_path);
 
-  constexpr size_t start_val = 1024; /* 1 KB */
-  constexpr size_t iterations = 10;
+  constexpr size_t start_val = 512; 
+  constexpr size_t iterations = 8;
 
   std::stringstream ss;
   ss << "Buffer size;Compression;Time\n";
-  for(size_t i = 0; i <= iterations; i++)  
+  for(size_t i = 1; i <= iterations; i++)  
   {
-    size_t size = start_val * std::pow(2, i);
+    size_t size = start_val * i;
     
     LZSSPack lzss;
     auto start = std::chrono::high_resolution_clock::now();
     float compression = (float)data.size() / (float)lzss.pack(data, size).size();
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end - start;
-    ss << size / 1024 << ";" << compression << ";" << duration.count() << "\n";
+    ss << (float)size / 1024.f << ";" << compression << ";" << duration.count() << "\n";
     std::cout << (float)(i) / (float)iterations * 100.f << " %\n";
   }
   ss.seekp(0, std::ios::end);      

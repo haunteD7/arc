@@ -2,66 +2,47 @@
 
 #include <vector>
 #include <cstdint>
-#include <stdexcept>
 
 class LZSSUnpack
 {
 public:
-  std::vector<uint8_t> unpack(const std::vector<uint8_t>& input)
+  std::vector<uint8_t> unpack(const std::vector<uint8_t> &input)
   {
-    std::vector<uint8_t> result;
+    std::vector<uint8_t> output;
 
-    const uint8_t* data = input.data();
-    size_t size = input.size();
+    size_t i = 0;
 
-    size_t current = 0;
-
-    while (current < size)
+    while (i < input.size())
     {
-      uint8_t flag = data[current++];
+      uint8_t flags = input[i++];
 
-      // literal
-      if (flag == 0)
+      for (int bit = 0; bit < 8 && i < input.size(); bit++)
       {
-        if (current >= size)
-          throw std::runtime_error("Unexpected end of data");
-
-        result.push_back(data[current++]);
-      }
-      // match
-      else
-      {
-        if (current + 4 > size)
-          throw std::runtime_error("Bad compressed data");
-
-        uint16_t offset = read_uint16(data, current, size);
-        uint16_t length = read_uint16(data, current, size);
-
-        if (offset == 0 || offset > result.size())
-          throw std::runtime_error("Invalid offset");
-
-        size_t start = result.size() - offset;
-
-        for (size_t i = 0; i < length; ++i)
+        if (flags & (1 << bit))
         {
-          result.push_back(result[start + i]);
+          // match
+          uint16_t packed =
+              (input[i] << 8) | input[i + 1];
+          i += 2;
+
+          size_t offset = (packed >> 4) & 0xFFF;
+          size_t length = (packed & 0xF) + 3;
+
+          size_t start = output.size() - offset;
+
+          for (size_t j = 0; j < length; j++)
+          {
+            output.push_back(output[start + j]);
+          }
+        }
+        else
+        {
+          // literal
+          output.push_back(input[i++]);
         }
       }
     }
 
-    return result;
-  }
-
-private:
-  uint16_t read_uint16(const uint8_t* data, size_t& pos, size_t size)
-  {
-    if (pos + 2 > size)
-      throw std::runtime_error("Unexpected end while reading uint16");
-
-    uint16_t v = data[pos];
-    v |= static_cast<uint16_t>(data[pos + 1]) << 8;
-
-    pos += 2;
-    return v;
+    return output;
   }
 };
