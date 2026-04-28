@@ -9,7 +9,7 @@ class LZSSPack
 public:
   std::vector<uint8_t> pack(const std::vector<uint8_t> &input,
                             size_t window_size = 4096,
-                            size_t max_length = 18,
+                            size_t max_length = 15,
                             size_t min_match = 3)
   {
     std::vector<uint8_t> output;
