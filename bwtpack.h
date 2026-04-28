@@ -40,7 +40,7 @@ public:
   }
   
 private:
-  // Эффективное вычисление BWT с использованием суффиксного массива для циклических сдвигов
+  // uses suffix array
   template <std::random_access_iterator Iterator>
   void pack_block(Iterator begin, Iterator end)
   {
@@ -49,22 +49,20 @@ private:
 
     size_t n = std::distance(begin, end);
     
-    // Копируем данные для обработки
     std::vector<uint8_t> data;
     data.reserve(n);
     data.insert(data.end(), begin, end);
     
-    // Для BWT нужны циклические сдвиги, поэтому дублируем данные
-    // Это позволяет работать с циклическими сдвигами как с линейными суффиксами
+    // dobule the data
     std::vector<uint8_t> cyclic_data;
     cyclic_data.reserve(2 * n);
     cyclic_data.insert(cyclic_data.end(), data.begin(), data.end());
     cyclic_data.insert(cyclic_data.end(), data.begin(), data.end());
     
-    // Строим суффиксный массив для дублированных данных, но только для позиций 0..n-1
+    // build suffix array
     std::vector<size_t> suffix_array = build_suffix_array(cyclic_data, n);
     
-    // Находим индекс исходной строки в BWT
+    // find index of the original string
     size_t original_index = 0;
     for(size_t i = 0; i < n; i++)
     {
@@ -75,21 +73,18 @@ private:
       }
     }
     
-    // Формируем BWT: последний символ каждого циклического сдвига
-    // Для суффикса, начинающегося в позиции pos, последний символ циклического сдвига
-    // находится на позиции (pos + n - 1) в дублированных данных
+    // get last elements of all suffix arrays
     for(size_t i = 0; i < n; i++)
     {
       size_t pos = suffix_array[i];
       _result[_pos + i] = cyclic_data[pos + n - 1];
     }
     
-    // Сохраняем индекс исходной строки
+    // save index of original string
     std::memcpy(&_result[n + _pos], &original_index, sizeof(size_t));
     _pos += n + sizeof(size_t);
   }
   
-  // Построение суффиксного массива за O(n log n) с использованием удвоения
   std::vector<size_t> build_suffix_array(const std::vector<uint8_t>& data, size_t limit)
   {
     size_t n = data.size();
@@ -97,14 +92,13 @@ private:
     std::vector<size_t> rank(n);
     std::vector<size_t> new_rank(n);
     
-    // Инициализация: суффиксы по первому символу
+    // initialize
     for(size_t i = 0; i < n; i++)
     {
       suffix_array[i] = i;
       rank[i] = data[i];
     }
     
-    // Сортировка с использованием компаратора
     auto cmp = [&](size_t a, size_t b) -> bool
     {
       if(rank[a] != rank[b])
@@ -116,7 +110,6 @@ private:
     
     std::sort(suffix_array.begin(), suffix_array.end(), cmp);
     
-    // Пересчет рангов
     new_rank[suffix_array[0]] = 0;
     for(size_t i = 1; i < n; i++)
     {
@@ -125,7 +118,6 @@ private:
     }
     rank.swap(new_rank);
     
-    // Удвоение
     for(size_t k = 2; k < n; k <<= 1)
     {
       auto cmp_k = [&](size_t a, size_t b) -> bool
@@ -151,7 +143,6 @@ private:
         break;
     }
     
-    // Фильтруем только нужные позиции (0..limit-1)
     std::vector<size_t> result;
     result.reserve(limit);
     for(size_t i = 0; i < n && result.size() < limit; i++)
