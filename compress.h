@@ -39,7 +39,7 @@ void compress(int compressor, std::vector<uint8_t> &data)
   case 3: /* BWT + RLE */
   {
     BWTPack bwt;
-    data = bwt.pack(data.begin(), data.end(), 256);
+    data = bwt.pack(data.begin(), data.end(), 256 * 1024);
     RLEPack rle;
     data = rle.pack(data.begin(), data.end(), 1, 1);
     break;
@@ -47,7 +47,7 @@ void compress(int compressor, std::vector<uint8_t> &data)
   case 4: /* BWT + MTF + HA */
   {
     BWTPack bwt;
-    data = bwt.pack(data.begin(), data.end(), 256);
+    data = bwt.pack(data.begin(), data.end(), 256 * 1024);
     MTFPack mtf;
     data = mtf.pack(std::move(data), 8);
     HuffmanPack ha;
@@ -57,7 +57,7 @@ void compress(int compressor, std::vector<uint8_t> &data)
   case 5: /* 5. BWT + MTF + RLE + HA */
   {
     BWTPack bwt;
-    data = bwt.pack(data.begin(), data.end(), 256);
+    data = bwt.pack(data.begin(), data.end(), 256 * 1024);
     MTFPack mtf;
     data = mtf.pack(std::move(data), 8);
     RLEPack rle;

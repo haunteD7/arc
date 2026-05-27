@@ -15,16 +15,16 @@ std::vector<uint8_t> load_file(std::string_view path)
 {
   std::ifstream in_fs(path.data(), std::ios::binary);
   if(!in_fs.is_open())
-    throw std::runtime_error("Cannot open file");
+    throw std::runtime_error("Cannot open file " + std::string(path));
 
   std::error_code ec;
   size_t data_size = std::filesystem::file_size(path, ec);
   if (ec)
-    throw std::runtime_error("Cannot get file size");
+    throw std::runtime_error("Cannot get file size " + std::string(path));
 
   std::vector<uint8_t> data(data_size);
   if(!in_fs.read((char*)data.data(), data_size))
-    throw std::runtime_error("Cannot read file");
+    throw std::runtime_error("Cannot read file " + std::string(path));
 
   return data;
 }
@@ -128,12 +128,14 @@ void lzw_test()
 
 std::string files[] =
 {
-  "color.bmp",
+  "colour.bmp",
+  "colour.jpg",
   "grey.bmp",
+  "grey.jpg",
   "bw.bmp",
   "ru.txt",
   "enwik7.txt",
-  "helldivers2.exe",
+  "CoDWaW.exe",
 };
 
 int main(int argc, char const *argv[])
